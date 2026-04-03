@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="sv">
 <head>
 <meta charset="UTF-8">
@@ -116,138 +117,185 @@ const SHORT=["Mån","Tis","Ons","Tor","Fre","Lör","Sön"];
 const CI={"Ben":"🦵","Höft":"🍑","Core":"💪","Rygg":"🔙","Axlar":"🤸","Balans":"⚖️","Stretch":"🧘","Cardio":"❤️‍🔥","Vila":"🌿","Övrigt":"🔄"};
 const CATS=Object.keys(CI);
 let S={exercises:[],log:{}};
-let tab="tracker",aDay=(()=>{const d=new Date().getDay();return d===0?6:d-1})(),editId=null,weekOff=0;
-function load(){try{const s=localStorage.getItem("rehab-v2");if(s)S=JSON.parse(s)}catch(e){}}
-function save(){try{localStorage.setItem("rehab-v2",JSON.stringify(S))}catch(e){}}
-load();
-function weekKey(date){const d=new Date(date);d.setHours(0,0,0,0);const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);d.setDate(diff);return d.toISOString().slice(0,10)}
-function curWK(){const d=new Date();d.setDate(d.getDate()+weekOff*7);return weekKey(d)}
-function lk(eid,di,inst,wk){return wk+"_"+di+"_"+eid+"_"+inst}
-function exsForDay(di){const dn=DAYS[di],r=[];S.exercises.forEach(ex=>{if(ex.days&&ex.days.includes(dn)){const t=ex.timesPerDay||1;for(let i=0;i<t;i++)r.push({...ex,inst:i,iLabel:t>1?"Pass "+(i+1):null})}});return r}
-function togDone(eid,di,inst){const wk=curWK(),k=lk(eid,di,inst,wk);if(!S.log[k])S.log[k]={done:false,comment:"",ts:null};S.log[k].done=!S.log[k].done;S.log[k].ts=S.log[k].done?new Date().toISOString():null;save();render()}
-function updComment(eid,di,inst,txt){const wk=curWK(),k=lk(eid,di,inst,wk);if(!S.log[k])S.log[k]={done:false,comment:"",ts:null};S.log[k].comment=txt;save()}
-function switchTab(t){tab=t;weekOff=0;render()}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-function render(){
-  document.getElementById("tabTracker").className="tab"+(tab==="tracker"?" active":"");
-  document.getElementById("tabLibrary").className="tab"+(tab==="library"?" active":"");
-  document.getElementById("tabHistory").className="tab"+(tab==="history"?" active":"");
-  document.getElementById("fabBtn").style.display=tab==="history"?"none":"flex";
-  const titles={tracker:"Dagens pass",library:"Övningsbibliotek",history:"Historik"};
-  document.getElementById("pageTitle").textContent=titles[tab];
-  if(tab==="tracker")rTracker();else if(tab==="library")rLibrary();else rHistory();
+let tab="tracker",aDay,editId=null,weekOff=0;
+
+// — Week key: always Monday’s date as YYYY-MM-DD —
+function getMonday(date){
+const d=new Date(date);d.setHours(0,0,0,0);
+const day=d.getDay(),diff=d.getDate()-day+(day===0?-6:1);
+d.setDate(diff);return d.toISOString().slice(0,10);
 }
+function thisWeekKey(){return getMonday(new Date())}
+function viewedWeekKey(){const d=new Date();d.setDate(d.getDate()+weekOff*7);return getMonday(d)}
+
+// Today’s day index (0=Mon … 6=Sun)
+function todayIdx(){const d=new Date().getDay();return d===0?6:d-1}
+aDay=todayIdx();
+
+// Log keys are scoped per week: “YYYY-MM-DD_dayIdx_exId_instance”
+function lk(eid,di,inst,wk){return wk+”*”+di+”*”+eid+”_”+inst}
+
+// — Persistence —
+function load(){try{const s=localStorage.getItem(“rehab-v3”);if(s)S=JSON.parse(s)}catch(e){}}
+function save(){try{localStorage.setItem(“rehab-v3”,JSON.stringify(S))}catch(e){}}
+load();
+
+// — Exercises for a given day —
+function exsForDay(di){
+const dn=DAYS[di],r=[];
+S.exercises.forEach(ex=>{
+if(ex.days&&ex.days.includes(dn)){
+const t=ex.timesPerDay||1;
+for(let i=0;i<t;i++) r.push({…ex,inst:i,iLabel:t>1?“Pass “+(i+1):null});
+}
+});return r;
+}
+
+// — Toggle / comment (always uses current week for tracker) —
+function togDone(eid,di,inst){
+const wk=thisWeekKey(),k=lk(eid,di,inst,wk);
+if(!S.log[k])S.log[k]={done:false,comment:””,ts:null};
+S.log[k].done=!S.log[k].done;
+S.log[k].ts=S.log[k].done?new Date().toISOString():null;
+save();render();
+}
+function updComment(eid,di,inst,txt){
+const wk=thisWeekKey(),k=lk(eid,di,inst,wk);
+if(!S.log[k])S.log[k]={done:false,comment:””,ts:null};
+S.log[k].comment=txt;save();
+}
+
+function switchTab(t){tab=t;weekOff=0;render()}
+function esc(s){return String(s).replace(/&/g,’&’).replace(/</g,’<’).replace(/>/g,’>’).replace(/”/g,’"’).replace(/’/g,’'’)}
+
+// — Render —
+function render(){
+document.getElementById(“tabTracker”).className=“tab”+(tab===“tracker”?” active”:””);
+document.getElementById(“tabLibrary”).className=“tab”+(tab===“library”?” active”:””);
+document.getElementById(“tabHistory”).className=“tab”+(tab===“history”?” active”:””);
+document.getElementById(“fabBtn”).style.display=tab===“history”?“none”:“flex”;
+const titles={tracker:“Dagens pass”,library:“Övningsbibliotek”,history:“Historik”};
+document.getElementById(“pageTitle”).textContent=titles[tab];
+if(tab===“tracker”)rTracker();else if(tab===“library”)rLibrary();else rHistory();
+}
+
 function rTracker(){
-  const wk=curWK(),exs=exsForDay(aDay);
-  const dc=exs.filter(e=>S.log[lk(e.id,aDay,e.inst,wk)]?.done).length,tot=exs.length;
-  const pct=tot>0?(dc/tot)*100:0,allD=dc===tot&&tot>0;
-  let h='<div class="day-pills">';
-  DAYS.forEach((d,i)=>{const de=exsForDay(i),dd=de.length>0&&de.every(e=>S.log[lk(e.id,i,e.inst,wk)]?.done),he=de.length>0;
-    let c="day-pill";if(i===aDay)c+=" active";if(he)c+=" has-ex";if(dd)c+=" done";
-    h+=`<button class="${c}" onclick="aDay=${i};render()">${SHORT[i]}<span class="dot"></span></button>`;});
-  h+='</div>';
-  if(tot>0){h+=`<div class="progress-wrap"><div class="progress-header"><span class="progress-label">Framsteg</span><span class="progress-count${allD?' complete':''}">${dc}/${tot}${allD?' ✓ Klart!':''}</span></div><div class="progress-bar"><div class="progress-fill${pct>0?' glow':''}${allD?' alldone':''}" style="width:${pct}%"></div></div></div>`}
-  h+='<div class="cards">';
-  if(exs.length===0){h+=`<div class="empty"><div class="empty-icon">📭</div><p class="empty-title">Inga övningar för ${DAYS[aDay].toLowerCase()}</p><p class="empty-sub">Tryck på + för att lägga till</p></div>`}
-  else exs.forEach((ex,idx)=>{
-    const k=lk(ex.id,aDay,ex.inst,wk),en=S.log[k]||{done:false,comment:""},dn=en.done,ic=CI[ex.category]||"🔄";
-    h+=`<div class="card${dn?' checked':''}" style="animation-delay:${idx*0.05}s">
-      <div class="checkbox" onclick="togDone('${ex.id}',${aDay},${ex.inst})">${dn?'✓':''}</div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;cursor:pointer" onclick="togDone('${ex.id}',${aDay},${ex.inst})">
-          <span style="font-size:18px;margin-right:8px">${ic}</span>
-          <span class="card-name">${esc(ex.name)}</span>
-          ${ex.iLabel?`<span class="instance-badge">${ex.iLabel}</span>`:''}
-        </div>
-        <div>${ex.sets?`<span class="tag">${ex.sets} sets</span>`:''}${ex.reps?`<span class="tag">${ex.reps} reps</span>`:''}${ex.time?`<span class="tag time">⏱ ${esc(ex.time)}</span>`:''}</div>
-        ${ex.note?`<p class="card-note">${esc(ex.note)}</p>`:''}
-        ${dn?`<textarea class="comment-area" placeholder="Kommentar… (smärta, känsla, variation)" oninput="updComment('${ex.id}',${aDay},${ex.inst},this.value)">${esc(en.comment||'')}</textarea>`:''}
-      </div>
-      <button onclick="openEdit('${ex.id}')" style="background:none;border:none;cursor:pointer;color:var(--text4);font-size:16px;padding:4px;flex-shrink:0">✏️</button>
-    </div>`;});
-  h+='</div>';
-  h+=`<div class="celebration${allD?' show':''}"><div class="celebration-inner">
-    <div style="font-size:32px;margin-bottom:8px">🎉</div>
-    <p style="font-weight:700;font-size:16px;font-family:'Playfair Display',serif;color:var(--accent)">Bra jobbat!</p>
-    <p style="margin-top:4px;font-size:13px;color:var(--text3)">Alla övningar avklarade för ${DAYS[aDay].toLowerCase()}.</p>
+const wk=thisWeekKey(),exs=exsForDay(aDay);
+const dc=exs.filter(e=>S.log[lk(e.id,aDay,e.inst,wk)]?.done).length,tot=exs.length;
+const pct=tot>0?(dc/tot)*100:0,allD=dc===tot&&tot>0;
+let h=’<div class="day-pills">’;
+DAYS.forEach((d,i)=>{
+const de=exsForDay(i),dd=de.length>0&&de.every(e=>S.log[lk(e.id,i,e.inst,wk)]?.done),he=de.length>0;
+let c=“day-pill”;if(i===aDay)c+=” active”;if(he)c+=” has-ex”;if(dd)c+=” done”;
+const isToday=i===todayIdx();
+h+=`<button class="${c}" onclick="aDay=${i};render()">${SHORT[i]}${isToday?' •':''}<span class="dot"></span></button>`;
+});
+h+=’</div>’;
+if(tot>0){h+=`<div class="progress-wrap"><div class="progress-header"><span class="progress-label">Framsteg</span><span class="progress-count${allD?' complete':''}">${dc}/${tot}${allD?' ✓ Klart!':''}</span></div><div class="progress-bar"><div class="progress-fill${pct>0?' glow':''}${allD?' alldone':''}" style="width:${pct}%"></div></div></div>`}
+h+=’<div class="cards">’;
+if(exs.length===0){h+=`<div class="empty"><div class="empty-icon">📭</div><p class="empty-title">Inga övningar för ${DAYS[aDay].toLowerCase()}</p><p class="empty-sub">Tryck på + för att lägga till</p></div>`}
+else exs.forEach((ex,idx)=>{
+const k=lk(ex.id,aDay,ex.inst,wk),en=S.log[k]||{done:false,comment:””},dn=en.done,ic=CI[ex.category]||“🔄”;
+h+=`<div class="card${dn?' checked':''}" style="animation-delay:${idx*0.05}s"> <div class="checkbox" onclick="togDone('${ex.id}',${aDay},${ex.inst})">${dn?'✓':''}</div> <div style="flex:1;min-width:0"> <div style="display:flex;align-items:center;cursor:pointer" onclick="togDone('${ex.id}',${aDay},${ex.inst})"> <span style="font-size:18px;margin-right:8px">${ic}</span> <span class="card-name">${esc(ex.name)}</span> ${ex.iLabel?`<span class="instance-badge">${ex.iLabel}</span>`:''} </div> <div>${ex.sets?`<span class="tag">${ex.sets} sets</span>`:''}${ex.reps?`<span class="tag">${ex.reps} reps</span>`:''}${ex.time?`<span class="tag time">⏱ ${esc(ex.time)}</span>`:''}</div> ${ex.note?`<p class="card-note">${esc(ex.note)}</p>`:''} ${dn?`<textarea class="comment-area" placeholder="Kommentar… (smärta, känsla, variation)" oninput="updComment('${ex.id}',${aDay},${ex.inst},this.value)">${esc(en.comment||’’)}</textarea>`:''} </div> <button onclick="openEdit('${ex.id}')" style="background:none;border:none;cursor:pointer;color:var(--text4);font-size:16px;padding:4px;flex-shrink:0">✏️</button> </div>`;});
+h+=’</div>’;
+h+=`<div class="celebration${allD?' show':''}"><div class="celebration-inner">
+<div style="font-size:32px;margin-bottom:8px">🎉</div>
+<p style="font-weight:700;font-size:16px;font-family:'Playfair Display',serif;color:var(--accent)">Bra jobbat!</p>
+<p style="margin-top:4px;font-size:13px;color:var(--text3)">Alla övningar avklarade för ${DAYS[aDay].toLowerCase()}.</p>
+
   </div></div>`;
   document.getElementById("content").innerHTML=h;
 }
+
 function rLibrary(){
-  let h='<div style="padding:16px 20px">';
-  if(S.exercises.length===0){h+=`<div class="empty"><div class="empty-icon">🏋️</div><p class="empty-title">Inga övningar ännu</p><p class="empty-sub">Tryck på + för att lägga till</p></div>`}
-  else S.exercises.forEach((ex,idx)=>{const ic=CI[ex.category]||"🔄",ds=ex.days&&ex.days.length>0?ex.days.map(d=>d.slice(0,3)).join(", "):'<span style="color:var(--text4)">Inga dagar</span>',ts=ex.timesPerDay>1?` <span style="color:var(--accent)">× ${ex.timesPerDay}/dag</span>`:'';
-    h+=`<div class="card" style="cursor:pointer;animation-delay:${idx*0.04}s;margin-bottom:10px" onclick="openEdit('${ex.id}')">
-      <span style="font-size:22px">${ic}</span>
-      <div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600">${esc(ex.name)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px">${ds}${ts}</div></div>
-      <span style="color:var(--text4);font-size:14px">›</span></div>`;});
-  h+='</div>';
-  document.getElementById("content").innerHTML=h;
+let h=’<div style="padding:16px 20px">’;
+if(S.exercises.length===0){h+=`<div class="empty"><div class="empty-icon">🏋️</div><p class="empty-title">Inga övningar ännu</p><p class="empty-sub">Tryck på + för att lägga till</p></div>`}
+else S.exercises.forEach((ex,idx)=>{
+const ic=CI[ex.category]||“🔄”,ds=ex.days&&ex.days.length>0?ex.days.map(d=>d.slice(0,3)).join(”, “):’<span style="color:var(--text4)">Inga dagar</span>’,ts=ex.timesPerDay>1?` <span style="color:var(--accent)">× ${ex.timesPerDay}/dag</span>`:’’;
+h+=`<div class="card" style="cursor:pointer;animation-delay:${idx*0.04}s;margin-bottom:10px" onclick="openEdit('${ex.id}')"> <span style="font-size:22px">${ic}</span> <div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600">${esc(ex.name)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px">${ds}${ts}</div></div> <span style="color:var(--text4);font-size:14px">›</span></div>`;});
+h+=’</div>’;
+document.getElementById(“content”).innerHTML=h;
 }
+
 function isoWeek(d){const dt=new Date(d.getTime());dt.setHours(0,0,0,0);dt.setDate(dt.getDate()+3-(dt.getDay()+6)%7);const w1=new Date(dt.getFullYear(),0,4);return 1+Math.round(((dt.getTime()-w1.getTime())/864e5-3+(w1.getDay()+6)%7)/7)}
+
 function rHistory(){
-  const now=new Date(),od=new Date(now);od.setDate(od.getDate()+weekOff*7);
-  const wk=weekKey(od),ws=new Date(wk+"T00:00:00"),we=new Date(ws);we.setDate(we.getDate()+6);
-  const isCur=weekOff===0,fmt=d=>`${d.getDate()}/${d.getMonth()+1}`;
-  let h=`<div class="week-nav">
-    <button class="week-btn" onclick="weekOff--;render()">‹</button>
-    <div class="week-label">${isCur?'Denna vecka':'Vecka '+isoWeek(ws)}<span class="sub">${fmt(ws)} – ${fmt(we)}</span></div>
-    <button class="week-btn" onclick="weekOff++;render()"${isCur?' disabled':''}>›</button></div>`;
-  h+='<div style="padding:16px 20px">';
-  let any=false;
-  DAYS.forEach((dn,di)=>{const exs=exsForDay(di);if(!exs.length)return;any=true;
-    const entries=exs.map(ex=>{const k=lk(ex.id,di,ex.inst,wk);return{ex,en:S.log[k]||{done:false,comment:""}}}),
-    dc=entries.filter(e=>e.en.done).length,tot=entries.length,allD=dc===tot,none=dc===0;
-    const bc=allD?'var(--accent)':none?'var(--text4)':'#e8a735',bb=allD?'rgba(56,189,148,0.12)':none?'rgba(255,255,255,0.04)':'rgba(232,167,53,0.12)';
-    h+=`<div class="history-day"><div class="history-day-title">${dn}<span class="history-day-badge" style="color:${bc};background:${bb}">${dc}/${tot}</span></div>`;
-    entries.forEach(({ex,en})=>{const ic=CI[ex.category]||"🔄";
-      h+=`<div class="history-ex${en.done?' was-done':''}">
-        <div class="history-ex-name">${en.done?'✅':'⬜'} ${ic} ${esc(ex.name)}${ex.iLabel?` <span class="instance-badge">${ex.iLabel}</span>`:''}</div>
-        <div>${ex.sets?`<span class="tag">${ex.sets}s</span>`:''}${ex.reps?`<span class="tag">${ex.reps}r</span>`:''}${ex.time?`<span class="tag time">⏱${esc(ex.time)}</span>`:''}</div>
-        ${en.comment?`<div class="history-ex-comment">${esc(en.comment)}</div>`:''}</div>`;});
-    h+='</div>';});
-  if(!any)h+=`<div class="empty"><div class="empty-icon">📅</div><p class="empty-title">Inga övningar inlagda</p><p class="empty-sub">Lägg till övningar och välj dagar</p></div>`;
-  h+='</div>';
-  document.getElementById("content").innerHTML=h;
+const wk=viewedWeekKey(),ws=new Date(wk+“T00:00:00”),we=new Date(ws);we.setDate(we.getDate()+6);
+const isCur=weekOff===0,fmt=d=>`${d.getDate()}/${d.getMonth()+1}`;
+
+// Check if any data exists for weeks ahead
+let h=`<div class="week-nav"> <button class="week-btn" onclick="weekOff--;render()">‹</button> <div class="week-label">${isCur?'Denna vecka':'Vecka '+isoWeek(ws)}<span class="sub">${fmt(ws)} – ${fmt(we)}</span></div> <button class="week-btn" onclick="weekOff++;render()"${isCur?' disabled':''}>›</button></div>`;
+
+h+=’<div style="padding:16px 20px">’;
+
+// Week summary
+let totalDone=0,totalAll=0;
+DAYS.forEach((dn,di)=>{
+const exs=exsForDay(di);
+exs.forEach(ex=>{totalAll++;if(S.log[lk(ex.id,di,ex.inst,wk)]?.done)totalDone++});
+});
+if(totalAll>0){
+const wpct=Math.round((totalDone/totalAll)*100);
+const wColor=wpct===100?‘var(–accent)’:wpct>=50?’#e8a735’:‘var(–text4)’;
+h+=`<div style="background:var(--card);border:1px solid var(--card-border);border-radius:14px;padding:16px;margin-bottom:16px;text-align:center"> <div style="font-size:32px;font-weight:700;color:${wColor};font-family:'Playfair Display',serif">${wpct}%</div> <div style="font-size:12px;color:var(--text3);margin-top:4px">${totalDone} av ${totalAll} övningar genomförda</div> </div>`;
 }
-function openModal(){document.getElementById("modalOverlay").classList.add("open")}
-function closeModal(){document.getElementById("modalOverlay").classList.remove("open");editId=null}
-function openAdd(){editId=null;document.getElementById("modalTitle").textContent="Ny övning";rForm({});openModal()}
-function openEdit(id){const ex=S.exercises.find(e=>e.id===id);if(!ex)return;editId=id;document.getElementById("modalTitle").textContent="Redigera övning";rForm(ex);openModal()}
+
+let any=false;
+DAYS.forEach((dn,di)=>{
+const exs=exsForDay(di);if(!exs.length)return;any=true;
+const entries=exs.map(ex=>{const k=lk(ex.id,di,ex.inst,wk);return{ex,en:S.log[k]||{done:false,comment:””}}}),
+dc=entries.filter(e=>e.en.done).length,tot=entries.length,allD=dc===tot,none=dc===0;
+const bc=allD?‘var(–accent)’:none?‘var(–text4)’:’#e8a735’,bb=allD?‘rgba(56,189,148,0.12)’:none?‘rgba(255,255,255,0.04)’:‘rgba(232,167,53,0.12)’;
+h+=`<div class="history-day"><div class="history-day-title">${dn}<span class="history-day-badge" style="color:${bc};background:${bb}">${dc}/${tot}</span></div>`;
+entries.forEach(({ex,en})=>{const ic=CI[ex.category]||“🔄”;
+h+=`<div class="history-ex${en.done?' was-done':''}"> <div class="history-ex-name">${en.done?'✅':'⬜'} ${ic} ${esc(ex.name)}${ex.iLabel?` <span class="instance-badge">${ex.iLabel}</span>`:''}</div> <div>${ex.sets?`<span class="tag">${ex.sets}s</span>`:''}${ex.reps?`<span class="tag">${ex.reps}r</span>`:''}${ex.time?`<span class="tag time">⏱${esc(ex.time)}</span>`:''}</div> ${en.comment?`<div class="history-ex-comment">${esc(en.comment)}</div>`:''}</div>`;});
+h+=’</div>’;});
+if(!any)h+=`<div class="empty"><div class="empty-icon">📅</div><p class="empty-title">Inga övningar inlagda</p><p class="empty-sub">Lägg till övningar och välj dagar</p></div>`;
+h+=’</div>’;
+document.getElementById(“content”).innerHTML=h;
+}
+
+// — Modal —
+function openModal(){document.getElementById(“modalOverlay”).classList.add(“open”)}
+function closeModal(){document.getElementById(“modalOverlay”).classList.remove(“open”);editId=null}
+function openAdd(){editId=null;document.getElementById(“modalTitle”).textContent=“Ny övning”;rForm({});openModal()}
+function openEdit(id){const ex=S.exercises.find(e=>e.id===id);if(!ex)return;editId=id;document.getElementById(“modalTitle”).textContent=“Redigera övning”;rForm(ex);openModal()}
+
 function rForm(ex){
-  const nm=ex.name||'',cat=ex.category||'Övrigt',sets=ex.sets||'',reps=ex.reps||'',time=ex.time||'',note=ex.note||'',days=ex.days||[],tpd=ex.timesPerDay||1;
-  let h=`<label class="form-label">Namn</label><input class="form-input" id="fN" value="${esc(nm)}" placeholder="T.ex. Knäböj">`;
-  h+=`<label class="form-label">Kategori</label><div class="chips" id="cC">`;
-  CATS.forEach(c=>{h+=`<button class="chip${c===cat?' active':''}" onclick="selCat(this,'${c}')">${CI[c]} ${c}</button>`});
-  h+='</div>';
-  h+=`<div class="form-row"><div><label class="form-label">Sets</label><input class="form-input" id="fS" type="number" value="${sets}" placeholder="3"></div><div><label class="form-label">Reps</label><input class="form-input" id="fR" type="number" value="${reps}" placeholder="12"></div></div>`;
-  h+=`<label class="form-label">Tid (valfritt)</label><input class="form-input" id="fT" value="${esc(time)}" placeholder="T.ex. 30s, 2 min">`;
-  h+=`<label class="form-label">Anteckning (valfritt)</label><input class="form-input" id="fNo" value="${esc(note)}" placeholder="T.ex. Per sida">`;
-  h+=`<label class="form-label">Dagar</label><div class="chips" id="dC">`;
-  DAYS.forEach((d,i)=>{h+=`<button class="chip${days.includes(d)?' active':''}" onclick="togDC(this)">${SHORT[i]}</button>`});
-  h+='</div>';
-  h+=`<label class="form-label">Gånger per dag</label><input class="form-input" id="fTPD" type="number" value="${tpd}" placeholder="1">`;
-  h+=`<button class="btn-save" onclick="saveEx()">${editId?'Spara ändringar':'Lägg till övning'}</button>`;
-  if(editId)h+=`<button class="btn-delete" onclick="delEx('${editId}')">Ta bort övning</button>`;
-  document.getElementById("modalBody").innerHTML=h;
+const nm=ex.name||’’,cat=ex.category||‘Övrigt’,sets=ex.sets||’’,reps=ex.reps||’’,time=ex.time||’’,note=ex.note||’’,days=ex.days||[],tpd=ex.timesPerDay||1;
+let h=`<label class="form-label">Namn</label><input class="form-input" id="fN" value="${esc(nm)}" placeholder="T.ex. Knäböj">`;
+h+=`<label class="form-label">Kategori</label><div class="chips" id="cC">`;
+CATS.forEach(c=>{h+=`<button class="chip${c===cat?' active':''}" onclick="selCat(this,'${c}')">${CI[c]} ${c}</button>`});
+h+=’</div>’;
+h+=`<div class="form-row"><div><label class="form-label">Sets</label><input class="form-input" id="fS" type="number" value="${sets}" placeholder="3"></div><div><label class="form-label">Reps</label><input class="form-input" id="fR" type="number" value="${reps}" placeholder="12"></div></div>`;
+h+=`<label class="form-label">Tid (valfritt)</label><input class="form-input" id="fT" value="${esc(time)}" placeholder="T.ex. 30s, 2 min">`;
+h+=`<label class="form-label">Anteckning (valfritt)</label><input class="form-input" id="fNo" value="${esc(note)}" placeholder="T.ex. Per sida">`;
+h+=`<label class="form-label">Dagar</label><div class="chips" id="dC">`;
+DAYS.forEach((d,i)=>{h+=`<button class="chip${days.includes(d)?' active':''}" onclick="togDC(this)">${SHORT[i]}</button>`});
+h+=’</div>’;
+h+=`<label class="form-label">Gånger per dag</label><input class="form-input" id="fTPD" type="number" value="${tpd}" placeholder="1">`;
+h+=`<button class="btn-save" onclick="saveEx()">${editId?'Spara ändringar':'Lägg till övning'}</button>`;
+if(editId)h+=`<button class="btn-delete" onclick="delEx('${editId}')">Ta bort övning</button>`;
+document.getElementById(“modalBody”).innerHTML=h;
 }
-function selCat(el,c){el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));el.classList.add('active')}
-function togDC(el){el.classList.toggle('active')}
+function selCat(el){el.parentElement.querySelectorAll(’.chip’).forEach(x=>x.classList.remove(‘active’));el.classList.add(‘active’)}
+function togDC(el){el.classList.toggle(‘active’)}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function saveEx(){
-  const nm=document.getElementById("fN").value.trim();if(!nm)return;
-  const catEl=document.querySelector("#cC .chip.active"),cat=catEl?catEl.textContent.trim().split(' ').pop():"Övrigt";
-  const sets=parseInt(document.getElementById("fS").value)||null,reps=parseInt(document.getElementById("fR").value)||null;
-  const time=document.getElementById("fT").value.trim()||null,note=document.getElementById("fNo").value.trim()||null;
-  const days=[];document.querySelectorAll("#dC .chip.active").forEach(el=>{const idx=SHORT.indexOf(el.textContent.trim());if(idx>=0)days.push(DAYS[idx])});
-  const tpd=parseInt(document.getElementById("fTPD").value)||1;
-  const ex={id:editId||uid(),name:nm,category:cat,sets,reps,time,note,days,timesPerDay:tpd};
-  if(editId)S.exercises=S.exercises.map(e=>e.id===editId?{...e,...ex}:e);
-  else S.exercises.push(ex);
-  save();closeModal();render();
+const nm=document.getElementById(“fN”).value.trim();if(!nm)return;
+const catEl=document.querySelector(”#cC .chip.active”),cat=catEl?catEl.textContent.trim().split(’ ‘).pop():“Övrigt”;
+const sets=parseInt(document.getElementById(“fS”).value)||null,reps=parseInt(document.getElementById(“fR”).value)||null;
+const time=document.getElementById(“fT”).value.trim()||null,note=document.getElementById(“fNo”).value.trim()||null;
+const days=[];document.querySelectorAll(”#dC .chip.active”).forEach(el=>{const idx=SHORT.indexOf(el.textContent.trim());if(idx>=0)days.push(DAYS[idx])});
+const tpd=parseInt(document.getElementById(“fTPD”).value)||1;
+const ex={id:editId||uid(),name:nm,category:cat,sets,reps,time,note,days,timesPerDay:tpd};
+if(editId)S.exercises=S.exercises.map(e=>e.id===editId?{…e,…ex}:e);
+else S.exercises.push(ex);
+save();closeModal();render();
 }
-function delEx(id){S.exercises=S.exercises.filter(e=>e.id!==id);Object.keys(S.log).forEach(k=>{if(k.includes('_'+id+'_'))delete S.log[k]});save();closeModal();render()}
+function delEx(id){S.exercises=S.exercises.filter(e=>e.id!==id);Object.keys(S.log).forEach(k=>{if(k.includes(’*’+id+’*’))delete S.log[k]});save();closeModal();render()}
 render();
 </script>
+
 </body>
 </html>
