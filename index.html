@@ -140,10 +140,22 @@ function save(){try{localStorage.setItem("rehab-v3",JSON.stringify(S))}catch(e){
 load();
 
 // --- Exercises for a given day ---
-function exsForDay(di){
+function exsForDay(di,weekKey){
+  weekKey=weekKey||thisWeekKey();
   const dn=DAYS[di],r=[];
+  const monday=new Date(weekKey+"T00:00:00");
+  monday.setDate(monday.getDate()+di);
+  const targetDate=monday;
   S.exercises.forEach(ex=>{
-    if(ex.days&&ex.days.includes(dn)){
+    let include=false;
+    if(ex.intervalDays&&ex.intervalStart){
+      const start=new Date(ex.intervalStart+"T00:00:00");
+      const diffDays=Math.round((targetDate.getTime()-start.getTime())/86400000);
+      include=diffDays>=0&&diffDays%ex.intervalDays===0;
+    } else if(ex.days&&ex.days.includes(dn)){
+      include=true;
+    }
+    if(include){
       const t=ex.timesPerDay||1;
       for(let i=0;i<t;i++) r.push({...ex,inst:i,iLabel:t>1?"Pass "+(i+1):null});
     }
@@ -179,12 +191,12 @@ function render(){
 }
 
 function rTracker(){
-  const wk=thisWeekKey(),exs=exsForDay(aDay);
+  const wk=thisWeekKey(),exs=exsForDay(aDay,wk);
   const dc=exs.filter(e=>S.log[lk(e.id,aDay,e.inst,wk)]?.done).length,tot=exs.length;
   const pct=tot>0?(dc/tot)*100:0,allD=dc===tot&&tot>0;
   let h='<div class="day-pills">';
   DAYS.forEach((d,i)=>{
-    const de=exsForDay(i),dd=de.length>0&&de.every(e=>S.log[lk(e.id,i,e.inst,wk)]?.done),he=de.length>0;
+    const de=exsForDay(i,wk),dd=de.length>0&&de.every(e=>S.log[lk(e.id,i,e.inst,wk)]?.done),he=de.length>0;
     let c="day-pill";if(i===aDay)c+=" active";if(he)c+=" has-ex";if(dd)c+=" done";
     const isToday=i===todayIdx();
     h+=`<button class="${c}" onclick="aDay=${i};render()">${SHORT[i]}${isToday?' •':''}<span class="dot"></span></button>`;
@@ -222,7 +234,7 @@ function rLibrary(){
   let h='<div style="padding:16px 20px">';
   if(S.exercises.length===0){h+=`<div class="empty"><div class="empty-icon">🏋️</div><p class="empty-title">Inga övningar ännu</p><p class="empty-sub">Tryck på + för att lägga till</p></div>`}
   else S.exercises.forEach((ex,idx)=>{
-    const ic=CI[ex.category]||"🔄",ds=ex.days&&ex.days.length>0?ex.days.map(d=>d.slice(0,3)).join(", "):'<span style="color:var(--text4)">Inga dagar</span>',ts=ex.timesPerDay>1?` <span style="color:var(--accent)">× ${ex.timesPerDay}/dag</span>`:'';
+    const ic=CI[ex.category]||"🔄",ds=ex.intervalDays?`var: ${ex.intervalDays}:e dag`:(ex.days&&ex.days.length>0?ex.days.map(d=>d.slice(0,3)).join(", "):'<span style="color:var(--text4)">Inga dagar</span>'),ts=ex.timesPerDay>1?` <span style="color:var(--accent)">× ${ex.timesPerDay}/dag</span>`:'';
     h+=`<div class="card" style="cursor:pointer;animation-delay:${idx*0.04}s;margin-bottom:10px" onclick="openEdit('${ex.id}')">
       <span style="font-size:22px">${ic}</span>
       <div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600">${esc(ex.name)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px">${ds}${ts}</div></div>
@@ -248,7 +260,7 @@ function rHistory(){
   // Week summary
   let totalDone=0,totalAll=0;
   DAYS.forEach((dn,di)=>{
-    const exs=exsForDay(di);
+    const exs=exsForDay(di,wk);
     exs.forEach(ex=>{totalAll++;if(S.log[lk(ex.id,di,ex.inst,wk)]?.done)totalDone++});
   });
   if(totalAll>0){
@@ -262,7 +274,7 @@ function rHistory(){
 
   let any=false;
   DAYS.forEach((dn,di)=>{
-    const exs=exsForDay(di);if(!exs.length)return;any=true;
+    const exs=exsForDay(di,wk);if(!exs.length)return;any=true;
     const entries=exs.map(ex=>{const k=lk(ex.id,di,ex.inst,wk);return{ex,en:S.log[k]||{done:false,comment:""}}}),
     dc=entries.filter(e=>e.en.done).length,tot=entries.length,allD=dc===tot,none=dc===0;
     const bc=allD?'var(--accent)':none?'var(--text4)':'#e8a735',bb=allD?'rgba(56,189,148,0.12)':none?'rgba(255,255,255,0.04)':'rgba(232,167,53,0.12)';
@@ -286,6 +298,7 @@ function openEdit(id){const ex=S.exercises.find(e=>e.id===id);if(!ex)return;edit
 
 function rForm(ex){
   const nm=ex.name||'',cat=ex.category||'Övrigt',sets=ex.sets||'',reps=ex.reps||'',time=ex.time||'',note=ex.note||'',days=ex.days||[],tpd=ex.timesPerDay||1;
+  const isInterval=!!(ex.intervalDays),intVal=ex.intervalDays||2;
   let h=`<label class="form-label">Namn</label><input class="form-input" id="fN" value="${esc(nm)}" placeholder="T.ex. Knäböj">`;
   h+=`<label class="form-label">Kategori</label><div class="chips" id="cC">`;
   CATS.forEach(c=>{h+=`<button class="chip${c===cat?' active':''}" onclick="selCat(this,'${c}')">${CI[c]} ${c}</button>`});
@@ -293,8 +306,15 @@ function rForm(ex){
   h+=`<div class="form-row"><div><label class="form-label">Sets</label><input class="form-input" id="fS" type="number" value="${sets}" placeholder="3"></div><div><label class="form-label">Reps</label><input class="form-input" id="fR" type="number" value="${reps}" placeholder="12"></div></div>`;
   h+=`<label class="form-label">Tid (valfritt)</label><input class="form-input" id="fT" value="${esc(time)}" placeholder="T.ex. 30s, 2 min">`;
   h+=`<label class="form-label">Anteckning (valfritt)</label><input class="form-input" id="fNo" value="${esc(note)}" placeholder="T.ex. Per sida">`;
-  h+=`<label class="form-label">Dagar</label><div class="chips" id="dC">`;
+  h+=`<label class="form-label">Schema</label><div class="chips" id="sModeC">`;
+  h+=`<button class="chip${!isInterval?' active':''}" onclick="setSchedMode('days')">Veckodagar</button>`;
+  h+=`<button class="chip${isInterval?' active':''}" onclick="setSchedMode('interval')">Intervall</button>`;
+  h+='</div>';
+  h+=`<div id="schedDays"${isInterval?' style="display:none"':''}><div class="chips" id="dC">`;
   DAYS.forEach((d,i)=>{h+=`<button class="chip${days.includes(d)?' active':''}" onclick="togDC(this)">${SHORT[i]}</button>`});
+  h+='</div></div>';
+  h+=`<div id="schedInterval"${!isInterval?' style="display:none"':''}>`;
+  h+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="font-size:13px;color:var(--text3);white-space:nowrap">var:</span><input class="form-input" id="fInt" type="number" value="${intVal}" min="1" max="30" placeholder="2" style="margin-bottom:0;width:70px;text-align:center"><span style="font-size:13px;color:var(--text3);white-space:nowrap">:e dag</span></div>`;
   h+='</div>';
   h+=`<label class="form-label">Gånger per dag</label><input class="form-input" id="fTPD" type="number" value="${tpd}" placeholder="1">`;
   h+=`<button class="btn-save" onclick="saveEx()">${editId?'Spara ändringar':'Lägg till övning'}</button>`;
@@ -303,15 +323,29 @@ function rForm(ex){
 }
 function selCat(el){el.parentElement.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));el.classList.add('active')}
 function togDC(el){el.classList.toggle('active')}
+function setSchedMode(mode){
+  const isDays=mode==='days';
+  document.getElementById("schedDays").style.display=isDays?'':'none';
+  document.getElementById("schedInterval").style.display=isDays?'none':'';
+  document.querySelectorAll("#sModeC .chip").forEach((btn,i)=>{btn.classList.toggle('active',(i===0&&isDays)||(i===1&&!isDays))});
+}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
 function saveEx(){
   const nm=document.getElementById("fN").value.trim();if(!nm)return;
   const catEl=document.querySelector("#cC .chip.active"),cat=catEl?catEl.textContent.trim().split(' ').pop():"Övrigt";
   const sets=parseInt(document.getElementById("fS").value)||null,reps=parseInt(document.getElementById("fR").value)||null;
   const time=document.getElementById("fT").value.trim()||null,note=document.getElementById("fNo").value.trim()||null;
-  const days=[];document.querySelectorAll("#dC .chip.active").forEach(el=>{const idx=SHORT.indexOf(el.textContent.trim());if(idx>=0)days.push(DAYS[idx])});
   const tpd=parseInt(document.getElementById("fTPD").value)||1;
-  const ex={id:editId||uid(),name:nm,category:cat,sets,reps,time,note,days,timesPerDay:tpd};
+  const isInterval=document.getElementById("schedInterval").style.display!=='none';
+  let days=[],intervalDays=null,intervalStart=null;
+  if(isInterval){
+    intervalDays=parseInt(document.getElementById("fInt").value)||2;
+    if(editId){const existing=S.exercises.find(e=>e.id===editId);intervalStart=existing?.intervalStart||new Date().toISOString().slice(0,10);}
+    else intervalStart=new Date().toISOString().slice(0,10);
+  } else {
+    document.querySelectorAll("#dC .chip.active").forEach(el=>{const idx=SHORT.indexOf(el.textContent.trim());if(idx>=0)days.push(DAYS[idx])});
+  }
+  const ex={id:editId||uid(),name:nm,category:cat,sets,reps,time,note,days,timesPerDay:tpd,intervalDays,intervalStart};
   if(editId)S.exercises=S.exercises.map(e=>e.id===editId?{...e,...ex}:e);
   else S.exercises.push(ex);
   save();closeModal();render();
