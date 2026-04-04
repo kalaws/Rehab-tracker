@@ -234,7 +234,7 @@ function rLibrary(){
   let h='<div style="padding:16px 20px">';
   if(S.exercises.length===0){h+=`<div class="empty"><div class="empty-icon">🏋️</div><p class="empty-title">Inga övningar ännu</p><p class="empty-sub">Tryck på + för att lägga till</p></div>`}
   else S.exercises.forEach((ex,idx)=>{
-    const ic=CI[ex.category]||"🔄",ds=ex.intervalDays?`var: ${ex.intervalDays}:e dag`:(ex.days&&ex.days.length>0?ex.days.map(d=>d.slice(0,3)).join(", "):'<span style="color:var(--text4)">Inga dagar</span>'),ts=ex.timesPerDay>1?` <span style="color:var(--accent)">× ${ex.timesPerDay}/dag</span>`:'';
+    const ic=CI[ex.category]||"🔄",ds=ex.intervalDays?`Var ${ex.intervalDays} dag`:(ex.days&&ex.days.length>0?ex.days.map(d=>d.slice(0,3)).join(", "):'<span style="color:var(--text4)">Inga dagar</span>'),ts=ex.timesPerDay>1?` <span style="color:var(--accent)">× ${ex.timesPerDay}/dag</span>`:'';
     h+=`<div class="card" style="cursor:pointer;animation-delay:${idx*0.04}s;margin-bottom:10px" onclick="openEdit('${ex.id}')">
       <span style="font-size:22px">${ic}</span>
       <div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600">${esc(ex.name)}</div><div style="font-size:12px;color:var(--text3);margin-top:4px">${ds}${ts}</div></div>
@@ -314,7 +314,7 @@ function rForm(ex){
   DAYS.forEach((d,i)=>{h+=`<button class="chip${days.includes(d)?' active':''}" onclick="togDC(this)">${SHORT[i]}</button>`});
   h+='</div></div>';
   h+=`<div id="schedInterval"${!isInterval?' style="display:none"':''}>`;
-  h+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="font-size:13px;color:var(--text3);white-space:nowrap">var:</span><input class="form-input" id="fInt" type="number" value="${intVal}" min="1" max="30" placeholder="2" style="margin-bottom:0;width:70px;text-align:center"><span style="font-size:13px;color:var(--text3);white-space:nowrap">:e dag</span></div>`;
+  h+=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="font-size:13px;color:var(--text3);white-space:nowrap">Var</span><input class="form-input" id="fInt" type="number" value="${intVal}" min="1" max="30" placeholder="2" style="margin-bottom:0;width:70px;text-align:center"><span style="font-size:13px;color:var(--text3);white-space:nowrap">dag</span></div>`;
   h+='</div>';
   h+=`<label class="form-label">Gånger per dag</label><input class="form-input" id="fTPD" type="number" value="${tpd}" placeholder="1">`;
   h+=`<button class="btn-save" onclick="saveEx()">${editId?'Spara ändringar':'Lägg till övning'}</button>`;
