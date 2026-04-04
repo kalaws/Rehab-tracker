@@ -291,7 +291,11 @@ function rHistory(){
 }
 
 // --- Modal ---
-function openModal(){document.getElementById("modalOverlay").classList.add("open")}
+function openModal(){
+  const m=document.querySelector('.modal');
+  m.style.transition='';m.style.transform='';
+  document.getElementById("modalOverlay").classList.add("open");
+}
 function closeModal(){document.getElementById("modalOverlay").classList.remove("open");editId=null}
 function openAdd(){editId=null;document.getElementById("modalTitle").textContent="Ny övning";rForm({});openModal()}
 function openEdit(id){const ex=S.exercises.find(e=>e.id===id);if(!ex)return;editId=id;document.getElementById("modalTitle").textContent="Redigera övning";rForm(ex);openModal()}
@@ -351,6 +355,31 @@ function saveEx(){
   save();closeModal();render();
 }
 function delEx(id){S.exercises=S.exercises.filter(e=>e.id!==id);Object.keys(S.log).forEach(k=>{if(k.includes('_'+id+'_'))delete S.log[k]});save();closeModal();render()}
+// --- Swipe down to close modal ---
+(function(){
+  const modal=document.querySelector('.modal');
+  let startY=0,curY=0,dragging=false;
+  modal.addEventListener('touchstart',e=>{
+    if(modal.scrollTop>0)return;
+    startY=e.touches[0].clientY;curY=startY;dragging=true;
+    modal.style.transition='';
+  },{passive:true});
+  modal.addEventListener('touchmove',e=>{
+    if(!dragging)return;
+    if(modal.scrollTop>0){dragging=false;modal.style.transform='';return;}
+    curY=e.touches[0].clientY;
+    const dy=Math.max(0,curY-startY);
+    modal.style.transform=`translateY(${dy}px)`;
+  },{passive:true});
+  modal.addEventListener('touchend',()=>{
+    if(!dragging)return;dragging=false;
+    const dy=curY-startY;
+    modal.style.transition='transform 0.3s ease';
+    if(dy>100){modal.style.transform='translateY(100%)';setTimeout(closeModal,280);}
+    else{modal.style.transform='';}
+  },{passive:true});
+})();
+
 render();
 </script>
 </body>
